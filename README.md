@@ -120,5 +120,165 @@ GOPATH指向的目录，从上到下的顺序。
 我们已经知道，环境变量GOPATH指向的是一个或多个工作区，而每个工作区中都会有以代码包为基本组织形式的源码文件。
 源码文件分为三种：命令源码文件、库源码文件、测试源码文件，它们都有不同的用途和编写规则。
 
+1.命令源码文件的用途是什么？怎么编写它？  
+```bash
+命令源码文件是程序的运行入口，是每个可独立运行的程序必须拥有的。
+我们可以通过构建或安装生成与其对应的可执行文件，后者一般会与该命令源码文件的直接父级目录同名。
+
+例如：
+localhost:02 smallasa$ cat demo1.go
+package main
+
+import "fmt"
+
+func main() {
+    fmt.Println("Hello world!")
+}
+
+localhost:02 smallasa$ go run demo1.go
+Hello world!
+
+如上，一个源码文件声明属于main包，并且包含一个无参数声明且无结果声明的main函数，那么就是命令源码文件。
+
+当需要模块化编程时，我们往往会将代码拆分到多个文件，甚至拆分到不同的代码包中。
+但无论怎么样，对于一个独立的程序来说，命令源码文件永远只会也只能有一个。
+如果有与命令源码文件同包的源码文件，那么它们也应该声明属于main包。
+```
+
+2.命令源码文件怎么接收参数？
+```bash
+通过构建或安装命令源码文件生成的可执行文件就可以被称为"命令"，既然时命令，就应该具备接收参数的能力。
+
+例如：
+localhost:02 smallasa$ cat demo2.go
+package main
+
+import (
+    "flag"
+    "fmt"
+)
+
+var name string
+
+func init() {
+    flag.StringVar(&name, "name", "everyone", "The greeting object.")
+}
+
+func main() {
+    flag.Parse()
+    fmt.Printf("Hello %s!\n", name)
+}
+
+如上，Go语言标准库中有一个代码包专门用于接收和解析命令参数，这个代码包的名字是flag。
+如果想在代码中使用某个包中的程序实体，那么就应该先导入这个包。
+首先，导入flag和fmt这两个个包
+其次，人名肯定是字符串，定义变量name并声明类型
+然后，调用flag.StringVar函数，它接收四个参数：
+第1个参数，用于存储该命令参数的值的地址，这里就是前面声明的变量name，由表达式&name表示。
+第2个参数，为了指定该命令参数的名称，这里是name。
+第3个参数，为了指定在未追加该命令参数时的默认值，这里是everyone。
+第4个参数，该命令参数的简短说明，在打印命令帮助时会用到。
+最后，调用flag.Parse函数用于解析命令参数，并把它们的值赋值给相应的变量。
+
+对函数的调用必须在所有命令参数存储载体的声明（这里是对变量name的声明）和设置（这里是对flag.StringVar函数调用之后），
+并且在读取任何命令参数值之前进行。正因为如此，我们最好把flag.Parse()放在main函数的函数体第一行。
+```
+
+3.怎么在运行命令源码文件的时候传入参数？怎么查看参数的使用说明？
+```bash
+执行命令源码文件传入参数：
+localhost:02 smallasa$ go run demo2.go -name="penn"
+Hello penn!
+
+查看命令源码文件参数说明：
+localhost:02 smallasa$ go run demo2.go --help
+Usage of /var/folders/qt/6fyvg7c10_79j503k00fz4600000gn/T/go-build129113399/b001/exe/demo2:
+  -name string
+    	The greeting object. (default "everyone")
+exit status 2
+
+Usage of /var/folders/qt/6fyvg7c10_79j503k00fz4600000gn/T/go-build129113399/b001/exe/demo2表示：
+执行go run命令时，在构建上述命令源码文件时临时生成的可执行文件的完整路径。
+
+先构建这个命令源码文件,再运行可执行文件：
+localhost:02 smallasa$ go build demo2.go
+localhost:02 smallasa$ ./demo2 -name="penn"
+Hello penn!
+```
+
+4.怎么自定义命令源码文件的参数使用说明？
+```bash
+这有很多方式，最简单的一种方式就是对变量flag.Usage重新赋值。
+flag.Usage对类型是func()，即一种无参数声明且无结果声明的函数类型。
+注意，对flag.Usage的赋值必须在调用flag.Parse函数之前！
+
+例如：
+localhost:02 smallasa$ cat demo3.go
+package main
+
+import (
+    "os"
+    "flag"
+    "fmt"
+)
+
+var name string
+
+func init() {
+    flag.StringVar(&name, "name", "everyone", "The greeting object.")
+}
+
+func main() {
+    flag.Usage = func() {
+        fmt.Fprintf(os.Stderr, "Usage of %s:\n", "question")
+        flag.PrintDefaults()
+    }
+    flag.Parse()
+    fmt.Printf("Hello %s!\n", name)
+}
+
+localhost:02 smallasa$ go run demo3.go --help
+Usage of question:
+  -name string
+    	The greeting object. (default "everyone")
+exit status 2
 
 
+我们在调用flag包中的一些函数（比如StringVar、Parse等）的时候，实际上是在调用flag.CommandLine变量的方法。
+flag.CommandLine相当于默认情况下的命令参数容器。
+通过对flag.CommandLine重新赋值，我们可以更深层次的定制当前命令源码文件的参数使用说明。不再深入探讨。
+```
+
+5.思考
+```text
+1.默认情况下，我们可以让命令源码文件接收哪些类型的参数值？
+localhost:02 smallasa$ go doc flag|grep func|grep Var|awk '{print $2}'|awk -F '(' '{print $1}'|grep Var
+BoolVar
+DurationVar
+Float64Var
+Int64Var
+IntVar
+StringVar
+Uint64Var
+UintVar
+Var
+2.我们可以把自定义的数据类型作为参数值的类型吗？如果可以，怎么做？
+```
+
+6.知识补充
+```txt
+知识1：可以使用 go doc 或 godoc 命令查看命令帮助手册。
+例如：
+go doc fmt
+godoc fmt
+
+知识2：包的导入过程
+程序的初始化和执行都起始于main包。如果main包还导入了其它的包，那么就会在编译时将它们依次导入。
+有时一个包会被多个包同时导入，那么它只会被导入一次。
+当一个包被导入时，如果该包还导入了其它的包，那么它会先将其它包导入进来，然后再对这些包中的包级常量和变量进行初始化，
+接着执行init函数（如果存在），依次类推。等所有被导入的包都加载完毕后，就会开始对main包中的包级常量和变量进行初始化，
+然后执行main包中的init函数（如果存在），最后执行main函数。
+
+如下图：
+```
+![包的导入过程](static/image/包的导入过程.jpeg)
