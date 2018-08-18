@@ -9,8 +9,7 @@ chown -R root:root /usr/local/go
 
 cat > /etc/profile.d/go.sh <<EOF
 export GOROOT=/usr/local/go
-export GOPATH=$HOME/work
-export PATH=\$PATH:\${GOROOT}/bin
+export GOPATH=/Users/smallasa/Documents/github.com/learn_go
 EOF
 
 source /etc/profile  
@@ -18,7 +17,7 @@ source /etc/profile
 
 2.Go 查看版本
 ```bash
-localhost:~ smallasa$ go version
+liupengdeMBP:~ smallasa$ go version
 go version go1.10.3 darwin/amd64
 ```
 
@@ -126,7 +125,7 @@ GOPATH指向的目录，从上到下的顺序。
 我们可以通过构建或安装生成与其对应的可执行文件，后者一般会与该命令源码文件的直接父级目录同名。
 
 例如：
-localhost:02 smallasa$ cat demo1.go
+liupengdeMBP:02 smallasa$ cat demo1.go
 package main
 
 import "fmt"
@@ -135,7 +134,7 @@ func main() {
     fmt.Println("Hello world!")
 }
 
-localhost:02 smallasa$ go run demo1.go
+liupengdeMBP:02 smallasa$ go run demo1.go
 Hello world!
 
 如上，一个源码文件声明属于main包，并且包含一个无参数声明且无结果声明的main函数，那么就是命令源码文件。
@@ -150,7 +149,7 @@ Hello world!
 通过构建或安装命令源码文件生成的可执行文件就可以被称为"命令"，既然时命令，就应该具备接收参数的能力。
 
 例如：
-localhost:02 smallasa$ cat demo2.go
+liupengdeMBP:02 smallasa$ cat demo2.go
 package main
 
 import (
@@ -187,11 +186,11 @@ func main() {
 3.怎么在运行命令源码文件的时候传入参数？怎么查看参数的使用说明？
 ```bash
 执行命令源码文件传入参数：
-localhost:02 smallasa$ go run demo2.go -name="penn"
+liupengdeMBP:02 smallasa$ go run demo2.go -name="penn"
 Hello penn!
 
 查看命令源码文件参数说明：
-localhost:02 smallasa$ go run demo2.go --help
+liupengdeMBP:02 smallasa$ go run demo2.go --help
 Usage of /var/folders/qt/6fyvg7c10_79j503k00fz4600000gn/T/go-build129113399/b001/exe/demo2:
   -name string
     	The greeting object. (default "everyone")
@@ -201,8 +200,8 @@ Usage of /var/folders/qt/6fyvg7c10_79j503k00fz4600000gn/T/go-build129113399/b001
 执行go run命令时，在构建上述命令源码文件时临时生成的可执行文件的完整路径。
 
 先构建这个命令源码文件,再运行可执行文件：
-localhost:02 smallasa$ go build demo2.go
-localhost:02 smallasa$ ./demo2 -name="penn"
+liupengdeMBP:02 smallasa$ go build demo2.go
+liupengdeMBP:02 smallasa$ ./demo2 -name="penn"
 Hello penn!
 ```
 
@@ -213,7 +212,7 @@ flag.Usage对类型是func()，即一种无参数声明且无结果声明的函�
 注意，对flag.Usage的赋值必须在调用flag.Parse函数之前！
 
 例如：
-localhost:02 smallasa$ cat demo3.go
+liupengdeMBP:02 smallasa$ cat demo3.go
 package main
 
 import (
@@ -237,7 +236,7 @@ func main() {
     fmt.Printf("Hello %s!\n", name)
 }
 
-localhost:02 smallasa$ go run demo3.go --help
+liupengdeMBP:02 smallasa$ go run demo3.go --help
 Usage of question:
   -name string
     	The greeting object. (default "everyone")
@@ -252,7 +251,7 @@ flag.CommandLine相当于默认情况下的命令参数容器。
 5.思考
 ```text
 1.默认情况下，我们可以让命令源码文件接收哪些类型的参数值？
-localhost:02 smallasa$ go doc flag|grep func|grep Var|awk '{print $2}'|awk -F '(' '{print $1}'|grep Var
+liupengdeMBP:02 smallasa$ go doc flag|grep func|grep Var|awk '{print $2}'|awk -F '(' '{print $1}'|grep Var
 BoolVar
 DurationVar
 Float64Var
@@ -282,3 +281,178 @@ godoc fmt
 如下图：
 ```
 ![包的导入过程](static/image/包的导入过程.jpeg)
+
+
+## 3.库源码文件
+库源码文件不能被直接运行，它仅用于存放程序实体。只要遵循go语言规范，这些程序实体就可以被其他代码使用。
+
+1.程序实体是什么？
+```text
+在go语言中，它是变量、常量、函数、结构体和接口的统称。
+
+我们总会先声明（或说定义）程序实体，然后再去使用。程序实体的名字被统一称为标识符。
+标识符可以是任何Unicode编码表示的字母字符、数字、下划线'_'，但首字母不能是数字。
+```
+
+2.怎么把命令源码文件中的代码拆分到其它源码文件？
+```bash
+例如：
+liupengdeMBP:03 smallasa$ cat demo4.go
+package main
+
+import (
+    "flag"
+)
+
+var name string
+
+func init() {
+    flag.StringVar(&name, "name", "everyone", "The greeting object.")
+}
+
+func main() {
+    flag.Parse()
+    hello(name)
+}
+
+liupengdeMBP:03 smallasa$ cat demo4_lib.go
+package main
+
+import "fmt"
+
+func hello(name string) {
+    fmt.Printf("Hello, %s!\n", name)
+}
+
+liupengdeMBP:03 smallasa$ go run demo4.go demo4_lib.go
+Hello, everyone!
+
+如上，demo4.go和demo4_lib.go都声明自己属于main包。
+源码文件声明的包名可以与其所在目录的名称不同，只要这些文件声明的包名一致就可以。
+建议，在同一个目录下的源码文件都需要声明属于同一个代码包。
+
+或者先编译后执行：
+liupengdeMBP:03 smallasa$ go build ../03
+liupengdeMBP:03 smallasa$ ./03
+Hello, everyone!
+
+
+代码包声明基本规则：
+规则1：同目录下的源码文件的代码包声明语句要一致。
+规则2：源码文件声明的代码包的名称可以与其所在的目录的名称不同。针对代码包构建时，生成结果文件的名称与其父目录名称一致。
+```
+
+3.怎么将源码文件中的代码拆分到其它代码包？
+```bash
+在编写真正的程序时，我们仅仅把代码拆分到几个源码文件中是不够的。
+我们往往会使用模块化编程，根据代码的功能和用途把它们放置到不同的代码包中。
+
+例如：
+liupengdeMBP:learn_go smallasa$ mkdir -p src/demo/03/q2/lib/
+liupengdeMBP:learn_go smallasa$ cat src/demo/03/q2/lib/demo5_lib.go
+package lib5
+
+import "fmt"
+
+func Hello(name string) {
+    fmt.Printf("Hello, %s!\n", name)
+}
+
+将demo5_lib.go源码文件的package main改为package lib5，同时将函数hello改为Hello。
+```
+
+4.基于3，思考一下，代码包的导入路径总会与其所在目录的相对路径一致吗？
+```bash
+库源码文件demo5_lib.go所在目录的相对路径是demo/03/q2/lib，而它却声明自己属于lib5包。
+在这种情况下，该包导入路径是demo/03/q2/lib，还是demo/03/q2/lib5？
+
+首先，我们构建或安装这个代码包：
+liupengdeMBP:learn_go smallasa$ go install demo/03/q2/lib
+liupengdeMBP:learn_go smallasa$ ls pkg/darwin_amd64/demo/03/q2/lib.a
+pkg/darwin_amd64/demo/03/q2/lib.a
+
+综上，我们会发现构建或安装代码包没有问题。
+我们修改demo5.go源码文件，用于导入demo/03/q2/lib代码包，如下：
+liupengdeMBP:learn_go smallasa$ cat  src/demo/03/q2/demo5.go
+package main
+
+import (
+    "flag"
+    "demo/03/q2/lib"
+)
+
+var name string
+
+func init() {
+    flag.StringVar(&name, "name", "everyone", "The greeting object.")
+}
+
+func main() {
+    flag.Parse()
+    lib.Hello(name)
+}
+
+liupengdeMBP:learn_go smallasa$ go run src/demo/03/q2/demo5.go
+# command-line-arguments
+src/demo/03/q2/demo5.go:5:5: imported and not used: "demo/03/q2/lib" as lib5
+src/demo/03/q2/demo5.go:16:5: undefined: lib
+
+如上，执行遇到两个错误：
+第1个错误，我们导入了demo/03/q2/lib包，但没有使用其任何程序实体，这在go语言中是不允许的，在编译时导致失败。
+另外，as lib5 说明，虽然导入了代码包demo/03/q2/lib，但在使用程序实体但时候应该是lib5，这就是第2个错误原因。
+
+为什么会这样？
+根本原因就是，我们在源码文件中声明所属的代码包与其所在目录的名称不同。
+
+请记住：
+源码文件所在的目录相对于src目录的相对路径就是它的代码包导入路径，
+而实际使用程序实体时给定的限定符要与它声明所属的代码包名称对应。
+
+我们将demo5_lib.go文件中的代码包声明改为package lib。我们应该让声明的包名与其父目录的名称一致。
+如下：
+liupengdeMBP:learn_go smallasa$ cat src/demo/03/q2/lib/demo5_lib.go
+package lib
+
+import "fmt"
+
+func Hello(name string) {
+    fmt.Printf("Hello, %s!\n", name)
+}
+liupengdeMBP:learn_go smallasa$ go run src/demo/03/q2/demo5.go
+Hello, everyone!
+```
+
+5.基于3，思考一下，什么样的程序实体才可以被当前包外的代码引用？
+```text
+源码文件demo5_lib.go文件中的函数名hello为什么要大写？实际上涉及了Go语言中对程序实体访问权限对规则。
+
+名称对首字母大写对程序实体才可以被当前包外对代码引用，否则它就只能被当前包内的其它代码引用。
+
+通过名称，Go语言自然地把程序实体的访问权限划分为了包级私有的和公开的。
+对于包级私有的程序实体，即使你导入了它所在的代码包，你也无法引用到它。
+
+```
+
+6.基于3，思考一下，对于程序实体，还有其它访问权限规则吗？
+```text
+答案是肯定的。
+在1.5及后续版本中，我们可以通过创建internal代码包让一些程序实体仅仅能被当前模块中的其它代码引用。
+这被称为Go程序实体的第三种访问权限：模块级私有。
+
+具体规则是：
+internal代码包中声明的公开程序实体仅能被该代码包的直接父级包及其子包中的代码引用。
+当然，引用前需要先导入这个包。对于其它代码包，导入该internal包都是非法的，无法进行编译。
+```
+
+7.思考
+```text
+思考1：如果你需要导入两个代码包，而这两个代码包的最后一级是相同的，比如：dep/lib/flag 和 flag，会产生冲突吗？
+如果包中声明的包名相同，肯定冲突
+如果包中声明的包名不同，不会冲突
+
+思考2：如果会产生冲突，怎么解决冲突？有几种方式？
+方式一：在导入包的时候，设置别名，例如：import "f fmt"。
+方式二：在导入包的时候，导入点操作，例如：import ". fmt",直接通过Printf调用，而不是fmt.Printf方式调用。
+方式三：如果只想引入某包并没有在代码中实际调用则可以这么来避免冲突：import "_ fmt"
+
+```
