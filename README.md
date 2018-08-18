@@ -23,7 +23,7 @@ go version go1.10.3 darwin/amd64
 ```
 
 3.GOROOT GOPATH GOBIN  
-```text
+```html
 问题：设置GOPATH有什么意义？
 
 GOPATH:
