@@ -284,7 +284,7 @@ godoc fmt
 
 如下图：
 ```
-![包的导入过程](static/image/包的导入过程.jpeg)
+![包的导入过程](static/images/02/包的导入过程.jpeg)
 
 
 ## 3.库源码文件
@@ -722,13 +722,289 @@ Go语言本身对程序实体提供了相对粗粒的访问控制，但我们自
 ```
 
 
+## 6.程序实体那些事儿（下）
+上一节，我们一直围绕可重名变量进行讨论。如果可重名变量类型不同，那就需要引起我们的注意，它们之间可能存在“屏蔽”现象。
+必要的时候，我们需要严格检查它们的类型。
+
+1.怎么判断一个变量的类型？
+```bash
+liupengdeMBP:learn_go smallasa$ cat src/demo/06/q1/demo11.go
+package main
+
+import (
+    "fmt"
+)
+
+var container = []string{"zero", "one", "two"}
+
+
+func main() {
+    container := map[int]string{0:"zero", 1:"one", 2:"two"}
+    fmt.Printf("The block is %s.\n", container[1])
+}
+```
+以上面代码为例，在打印其中的元素之前，怎么正确判断container的类型？  
+**答案是使用"类型断言"表达式。**   
+
+例如：*value, ok := interface{}(container).([]string)*
+这里有一条赋值语句。在赋值符号右边，是一个类型判断表达式。
+**它包括了用来把container变量转换为空接口值的interface{}(container)，
+和一个用于判断前者的类型是否为切片类型的[]string的.([]string)。**
+
+这个表达式的结果可以被赋值给两个变量，这里由value和ok代表。变量ok是布尔类型，它将代表类型判断结果是true或者false。
+如果ok的类型判断是true，那么被判断的值将会自动被转换为[]string类型的值，可以赋值给一个变量，在这里是value。
+如果ok的类型判断是false，那么就会引发异常，这种异常在Go语言中被叫作panic，即运行时恐慌。
+panic是一种在Go程序运行期间才会抛出的异常。除非显示的恢复这种"恐慌"，否则它会使Go程序崩溃并停止。
+推荐使用带ok变量的写法。
+
+正式说明一下，类型判断的语法形式是“**x.(T)**”。
+其中，“x”代表要被判断类型的那个值。这个值当下的类型必须是接口类型的，不过具体是哪个接口类型其实无所谓。
+所以，当这里的container变量类型不是任何的接口类型时，我们就需要把它转换成某个接口类型的值。
+如果，container是某个接口类型的，那么这个类型断言表达式就可以是“container.([]string)”
+
+在Go语言中，interface{}代表空接口，任何类型都是它的实现类型。现在你只需要知道，任何类型的值都可以很方便被转换成空接口的值就行了。
+
+*你可能对这里的{}产生疑惑，为什么在关键字interface的右边还要加上花括号？*  
+请记住：**一对不包含任何东西的花括号，除了可以代表空的代码块之外，还可以用于表示不包含任何内容的数据结构(或者说数据类型)**  
+以后，你还会遇到“struct{}”，它代表了不包含任何字段和方法的、空的结构体类型。
+“interface{}”则代表了不包含任何方法定义的、空的接口类型。
+当然，对于一些集合的数据类型来说，“{}”还可以用来表示其值不包含任何元素，比如：空切片值[]string{}，空字典值map[int]string{}。
+
+最右边圆括号中的“[]string”是一个类型字面量。所谓类型字面量，就是用来表示数据类型本身的若干个字符。
+* string 表示字符串类型的字面量。
+* uint8 表示8位无符号证书类型的字面量。
+* []string 表示元素类型为string的切片类型。
+* map[int]string 表示键类型为int、值类型为string的字典类型。
+
+修改代码，增加类型判断:
+```bash
+liupengdeMBP:learn_go smallasa$ cat src/demo/06/q1/demo12.go
+package main
+
+import (
+	"fmt"
+)
+
+var container = []string{"zero", "one", "two"}
+
+func main() {
+	container := map[int]string{0: "zero", 1: "one", 2: "two"}
+
+	// 方式1。
+	_, ok1 := interface{}(container).([]string)
+	_, ok2 := interface{}(container).(map[int]string)
+	if !(ok1 || ok2) {
+		fmt.Printf("Error: unsupported container type: %T\n", container)
+		return
+	}
+	fmt.Printf("The element is %q. (container type: %T)\n",
+		container[1], container)
+
+	// 方式2。
+	elem, err := getElement(container)
+	if err != nil {
+		fmt.Printf("Error: %s\n", err)
+		return
+	}
+	fmt.Printf("The element is %q. (container type: %T)\n",
+		elem, container)
+}
+
+func getElement(containerI interface{}) (elem string, err error) {
+	switch t := containerI.(type) {
+	case []string:
+		elem = t[1]
+	case map[int]string:
+		elem = t[1]
+	default:
+		err = fmt.Errorf("unsupported container type: %T", containerI)
+		return
+	}
+	return
+}
+```
+
+2.你认为类型转换规则中哪些值得注意的地方？  
+类型转换表达式上面已经展示了。它的语法格式是“T(x)”。其中x可以是一个变量，也可以是一个代表值的字面量，还可以是一个表达式。
+
+注意：如果是表达式，那么该表达式的结果只能是一个值，而不能是多个值。
+在这个上下文中，x可以被叫作源值，它的类型就是源类型，而那个T代表的类型就是目标类型。
+如果从源类型到目标类型的转换是不合法的，那么就会引发一个编译错误。可以查看Go语言规范中的[转换](https://golang.google.cn/ref/spec#Conversions)部分。
+
+很多初学者所说的陷阱(或 坑)，大都源于他们需要了解但却不了解的那些知识和技巧。
+因此，先抛出三个非常值得注意的知识点，帮助你标出一些“陷阱”:
+* 首先，对于整数类型值、整数常量之间的类型转换，原则上值要源值在目标类型的可表示范围内就是合法的。
+* 其次，虽然直接把一个整数类型转换为一个string类型的值是可行的，但值得关注的是，
+被转换的整数值应该可以代表一个有效的Unicode代码点，否则转换的结果将会是“？”
+* 最后，是关于string类型与各种切片类型之间的互转的。你要理解的是，一个值在从string类型向[]byte类型转换的时代表着
+以UTF-8编码的字符串会被拆分成零散、独立的字节。其次，一个值在从string类型向[]rune类型转换时代表着字符串会被拆分成
+一个个Unicode字符。
+
+代码样例:
+```bash
+liupengdeMBP:learn_go smallasa$ cat src/demo/06/q2/demo13.go
+package main
+
+import (
+	"fmt"
+)
+
+func main() {
+	// 重点1的示例。
+	var srcInt = int16(-255)
+	// 请注意，之所以要执行uint16(srcInt)，是因为只有这样才能得到全二进制的表示。
+	// 例如，fmt.Printf("%b", srcInt)将打印出"-11111111"，后者是负数符号再加上srcInt的绝对值的补码。
+	// 而fmt.Printf("%b", uint16(srcInt))才会打印出srcInt原值的补码"1111111100000001"。
+	fmt.Printf("The complement of srcInt: %b (%b)\n",
+		uint16(srcInt), srcInt)
+	dstInt := int8(srcInt)
+	fmt.Printf("The complement of dstInt: %b (%b)\n",
+		uint8(dstInt), dstInt)
+	fmt.Printf("The value of dstInt: %d\n", dstInt)
+	fmt.Println()
+
+	// 重点2的示例。
+	fmt.Printf("The Replacement Character: %s\n", string(-1))
+	fmt.Printf("The Unicode codepoint of Replacement Character: %U\n", '�')
+	fmt.Println()
+
+	// 重点3的示例。
+	srcStr := "你好"
+	fmt.Printf("The string: %q\n", srcStr)
+	fmt.Printf("The hex of %q: %x\n", srcStr, srcStr)
+	fmt.Printf("The byte slice of %q: % x\n", srcStr, []byte(srcStr))
+	fmt.Printf("The string: %q\n", string([]byte{'\xe4', '\xbd', '\xa0', '\xe5', '\xa5', '\xbd'}))
+	fmt.Printf("The rune slice of %q: %U\n", srcStr, []rune(srcStr))
+	fmt.Printf("The string: %q\n", string([]rune{'\u4F60', '\u597D'}))
+}
+```
+
+3.什么是别名类型？什么是潜在类型？  
+我们可以使用type声明自定义的各种类型。当然，这些类型必须在Go语言基本类型和高级类型的范畴之内。
+在它们当中，有一种被叫作“别名类型”的类型。我们可以这样声明：  
+```bash
+type MyString = string
+```
+上面声明的语句表示，MyString是string类型的别名。别名类型与其源类型的区别只是在名字上不同，其余完全相同。
+别名类型的存在，主要是为了代码重构。
+
+Go语言内建的基本类型中就存在两个别名类型：byte是uint8的别名类型，rune是int32的别名类型。
+
+一定要注意，如果我这样声明：
+```bash
+type MyString2 string
+```
+MyString2 和 string 是两个不同的类型，这里的MyString2是一个新的类型，不同于其它任何类型。
+对于这里的类型再定义来说，string可以被称为MyString2的潜在类型。
+**潜在类型的含义是某个类型在本质上是哪个类型或者是哪个类型的集合。
+潜在类型相同的不同类型的值之间是可以进行类型转换的。**
+因此，MyString2类型的值与string类型的值可以使用类型转换表达式进行互转。
+
+但是，对于集合类的类型[]MyString2与[]string来说这样做却是不合法的，因为[]MyString2与[]string的潜在类型不同，分别是MyString2和string。
+另外，即使两个类型的潜在类型相同，它们的值之间有而不能进行判断或比较，它们的变量之间也不能赋值。
+
+4.总结  
+在本小节中，我们聚焦于类型。Go语言中的每个变量都是有类型的，我们可以使用类型断言表达式判断变量是哪个类型的。
+正确使用该表达式需要一些技巧，比如总是应该把结果赋给两个变量。另外还要保证被判断的变量是接口类型的，这可能会用到类型转换表达式。
+
+我们在使用类型转换表达式对变量的类型进行转换的时候，会受到一套规则的严格约束。我们必须关注这套规则中的一些细节，尤其
+是那些Go语言命令不会帮你检查的细节，否则就会踩进所谓的“陷阱”中。
+
+此外，你还应该搞清楚别名类型声明与类型再定义之间的区别，以及由此带来的它们的值在类型转换、判断、比较和赋值操作方面的不同。
+
+
+代码样例:
+```bash
+liupengdeMBP:learn_go smallasa$ cat src/demo/06/q3/demo14.go
+package main
+
+import "fmt"
+
+func main() {
+	// 示例1。
+	{
+		type MyString = string
+		str := "BCD"
+		myStr1 := MyString(str)
+		myStr2 := MyString("A" + str)
+		fmt.Printf("%T(%q) == %T(%q): %v\n",
+			str, str, myStr1, myStr1, str == myStr1)
+		fmt.Printf("%T(%q) > %T(%q): %v\n",
+			str, str, myStr2, myStr2, str > myStr2)
+		fmt.Printf("Type %T is the same as type %T.\n", myStr1, str)
+
+		strs := []string{"E", "F", "G"}
+		myStrs := []MyString(strs)
+		fmt.Printf("A value of type []MyString: %T(%q)\n",
+			myStrs, myStrs)
+		fmt.Printf("Type %T is the same as type %T.\n", myStrs, strs)
+		fmt.Println()
+	}
+	// 示例2。
+	{
+		type MyString string
+		str := "BCD"
+		myStr1 := MyString(str)
+		myStr2 := MyString("A" + str)
+		_ = myStr2
+		//fmt.Printf("%T(%q) == %T(%q): %v\n",
+		//	str, str, myStr1, myStr1, str == myStr1) // 这里的判等不合法，会引发编译错误。
+		//fmt.Printf("%T(%q) > %T(%q): %v\n",
+		//	str, str, myStr2, myStr2, str > myStr2) // 这里的比较不合法，会引发编译错误。
+		fmt.Printf("Type %T is different from type %T.\n", myStr1, str)
+
+		strs := []string{"E", "F", "G"}
+		var myStrs []MyString
+		//myStrs := []MyString(strs) // 这里的类型转换不合法，会引发编译错误。
+		//fmt.Printf("A value of type []MyString: %T(%q)\n",
+		//	myStrs, myStrs)
+		fmt.Printf("Type %T is different from type %T.\n", myStrs, strs)
+		fmt.Println()
+	}
+	// 示例3。
+	{
+		type MyString1 = string
+		type MyString2 string
+		str := "BCD"
+		myStr1 := MyString1(str)
+		myStr2 := MyString2(str)
+		myStr1 = MyString1(myStr2)
+		myStr2 = MyString2(myStr1)
+
+		myStr1 = str
+		//myStr2 = str // 这里的赋值不合法，会引发编译错误。
+		//myStr1 = myStr2 // 这里的赋值不合法，会引发编译错误。
+		//myStr2 = myStr1 // 这里的赋值不合法，会引发编译错误。
+	}
+}
+```
+
+5.思考
+```text
+1.你认为类型转换规则中还有哪些值得注意的地方？
+解答:
+* 接口之间的类型转换有时只有运行错误，不会有编译错误
+* 正数的补码等于原码，负数的补码才是反码
+
+2.你能具体说说别名类型在代码重构过程中可以起到哪些作用吗？
+解答:
+* 类型别名和原类型完全一样，可以随意命名，增加代码可读性
+* 需要修改数据类型时，只用改定义的那一处地方
+* 可以很方便的添加特有方法，以实现某些接口
+```
+
+
+
+
+
+
 
 
 
 
 ## 写给0基础入门的Go语言学习者
 1.Go语言学习路线图
-![Go语言学习路线图](static/image/Go语言学习路线.png)
+![Go语言学习路线图](static/images/00/Go语言学习路线.png)
 
 2.Go语言基础知识的导图
-![Go语言基础知识的导图](static/image/Go语言基础知识的导图.png)
+![Go语言基础知识的导图](static/images/00/Go语言基础知识的导图.png)
